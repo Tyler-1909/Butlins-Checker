@@ -14,6 +14,13 @@ TARGET_MONTH_YEAR = "August 2026"          # update this if you're still checkin
 URL = "https://passes.butlins.com/DayVisit/Index/#/home"
 
 
+def sanitize_header(text, max_length=800):
+    # HTTP headers can't contain newlines/carriage returns - strip and shorten
+    cleaned = text.replace("\n", " ").replace("\r", " ")
+    cleaned = " ".join(cleaned.split())  # collapse repeated whitespace
+    return cleaned[:max_length]
+
+
 def send_notification(image_path, title, message):
     with open(image_path, "rb") as f:
         data = f.read()
@@ -21,9 +28,9 @@ def send_notification(image_path, title, message):
         f"https://ntfy.sh/{NTFY_TOPIC}",
         data=data,
         headers={
-            "Title": title,
+            "Title": sanitize_header(title),
             "Filename": "calendar.png",
-            "Message": message,
+            "Message": sanitize_header(message),
         },
         timeout=30,
     )
@@ -72,7 +79,7 @@ async def run():
         debug_info = ""
         try:
             await page.wait_for_selector("select", timeout=20000)
-            await page.wait_for_timeout(3000)  # give options time to load in
+            await page.wait_for_timeout(3000)
             selects = page.locator("select")
             count = await selects.count()
             debug_lines = [f"Found {count} dropdown(s) on the page."]
