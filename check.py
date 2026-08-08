@@ -71,9 +71,18 @@ async def run():
         found_select = False
         try:
             await page.wait_for_selector("select", timeout=20000)
-            await page.select_option("select", label=RESORT)
-            await page.wait_for_timeout(2000)
-            found_select = True
+            selects = page.locator("select")
+            count = await selects.count()
+            target_index = None
+            for i in range(count):
+                option_texts = await selects.nth(i).locator("option").all_inner_texts()
+                if any(RESORT in t for t in option_texts):
+                    target_index = i
+                    break
+            if target_index is not None:
+                await selects.nth(target_index).select_option(label=RESORT)
+                await page.wait_for_timeout(3000)
+                found_select = True
         except Exception:
             pass
 
