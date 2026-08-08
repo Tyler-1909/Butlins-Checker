@@ -62,6 +62,8 @@ async def dismiss_cookie_banner(page):
 
 async def open_resort_dropdown(page):
     strategies = [
+        ("placeholder text", lambda: page.get_by_placeholder("Please select resort")),
+        ("input with resort placeholder (css)", lambda: page.locator("input[placeholder*='resort' i]").first),
         ("combobox role", lambda: page.get_by_role("combobox").first),
         ("role=combobox css", lambda: page.locator("[role='combobox']").first),
         ("last 'Please select resort' match", lambda: page.get_by_text("Please select resort", exact=False).last),
