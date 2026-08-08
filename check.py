@@ -60,27 +60,44 @@ async def dismiss_cookie_banner(page):
             continue
 
 
-async def select_resort(page):
-    # this is a custom clickable dropdown, not a native <select> - click to open it
-    opened = False
-    for sel in ["text=Please select resort", "text='Please select resort'"]:
+async def open_resort_dropdown(page):
+    strategies = [
+        ("combobox role", lambda: page.get_by_role("combobox").first),
+        ("role=combobox css", lambda: page.locator("[role='combobox']").first),
+        ("last 'Please select resort' match", lambda: page.get_by_text("Please select resort", exact=False).last),
+        ("first 'Please select resort' match", lambda: page.get_by_text("Please select resort", exact=False).first),
+        ("div containing 'Please select resort'", lambda: page.locator("div:has-text('Please select resort')").last),
+    ]
+    for label, strat in strategies:
         try:
-            await page.locator(sel).first.click(timeout=8000)
-            opened = True
-            break
+            el = strat()
+            if await el.count() == 0:
+                continue
+            await el.scroll_into_view_if_needed(timeout=3000)
+            await el.click(timeout=6000, force=True)
+            await page.wait_for_timeout(1200)
+            option_count = await page.get_by_role("option").count()
+            skeg_count = await page.get_by_text("Skegness", exact=True).count()
+            if option_count > 0 or skeg_count > 1:
+                return True, f"Opened dropdown using: {label}."
         except Exception:
             continue
-    if not opened:
-        return False, "Could not click the 'Please select resort' box to open it."
+    return False, "Tried several ways to click the resort box, none opened it."
 
-    await page.wait_for_timeout(1500)
+
+async def select_resort(page):
+    opened, open_debug = await open_resort_dropdown(page)
+    if not opened:
+        return False, open_debug
+
+    await page.wait_for_timeout(1000)
 
     try:
         option = page.get_by_role("option", name=RESORT, exact=True)
         if await option.count() > 0:
-            await option.first.click(timeout=5000)
+            await option.first.click(timeout=5000, force=True)
             await page.wait_for_timeout(2500)
-            return True, "Selected Skegness via role=option."
+            return True, f"{open_debug} Selected Skegness via role=option."
     except Exception:
         pass
 
@@ -88,13 +105,13 @@ async def select_resort(page):
         matches = page.get_by_text(RESORT, exact=True)
         count = await matches.count()
         if count > 0:
-            await matches.last.click(timeout=5000)
+            await matches.last.click(timeout=5000, force=True)
             await page.wait_for_timeout(2500)
-            return True, f"Selected Skegness via text match (option {count} of {count})."
+            return True, f"{open_debug} Selected Skegness via text match (option {count} of {count})."
     except Exception:
         pass
 
-    return False, "Opened the dropdown but could not find/click the Skegness option inside it."
+    return False, f"{open_debug} Opened the dropdown but could not find/click the Skegness option inside it."
 
 
 async def run():
