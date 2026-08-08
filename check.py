@@ -15,9 +15,8 @@ URL = "https://passes.butlins.com/DayVisit/Index/#/home"
 
 
 def sanitize_header(text, max_length=800):
-    # HTTP headers can't contain newlines/carriage returns - strip and shorten
     cleaned = text.replace("\n", " ").replace("\r", " ")
-    cleaned = " ".join(cleaned.split())  # collapse repeated whitespace
+    cleaned = " ".join(cleaned.split())
     return cleaned[:max_length]
 
 
@@ -67,18 +66,18 @@ async def run():
         page = await browser.new_page()
 
         try:
-            await page.goto(URL, wait_until="load", timeout=45000)
+            await page.goto(URL, wait_until="load", timeout=60000)
         except Exception:
             pass
 
-        await page.wait_for_timeout(3000)
+        await page.wait_for_timeout(5000)
         await dismiss_cookie_banner(page)
-        await page.wait_for_timeout(1000)
+        await page.wait_for_timeout(2000)
 
         found_select = False
         debug_info = ""
         try:
-            await page.wait_for_selector("select", timeout=20000)
+            await page.wait_for_selector("select", timeout=40000)
             await page.wait_for_timeout(3000)
             selects = page.locator("select")
             count = await selects.count()
