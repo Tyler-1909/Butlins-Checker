@@ -60,6 +60,43 @@ async def dismiss_cookie_banner(page):
             continue
 
 
+async def select_resort(page):
+    # this is a custom clickable dropdown, not a native <select> - click to open it
+    opened = False
+    for sel in ["text=Please select resort", "text='Please select resort'"]:
+        try:
+            await page.locator(sel).first.click(timeout=8000)
+            opened = True
+            break
+        except Exception:
+            continue
+    if not opened:
+        return False, "Could not click the 'Please select resort' box to open it."
+
+    await page.wait_for_timeout(1500)
+
+    try:
+        option = page.get_by_role("option", name=RESORT, exact=True)
+        if await option.count() > 0:
+            await option.first.click(timeout=5000)
+            await page.wait_for_timeout(2500)
+            return True, "Selected Skegness via role=option."
+    except Exception:
+        pass
+
+    try:
+        matches = page.get_by_text(RESORT, exact=True)
+        count = await matches.count()
+        if count > 0:
+            await matches.last.click(timeout=5000)
+            await page.wait_for_timeout(2500)
+            return True, f"Selected Skegness via text match (option {count} of {count})."
+    except Exception:
+        pass
+
+    return False, "Opened the dropdown but could not find/click the Skegness option inside it."
+
+
 async def run():
     async with async_playwright() as p:
         browser = await p.chromium.launch()
@@ -74,30 +111,7 @@ async def run():
         await dismiss_cookie_banner(page)
         await page.wait_for_timeout(2000)
 
-        found_select = False
-        debug_info = ""
-        try:
-            await page.wait_for_selector("select", timeout=40000)
-            await page.wait_for_timeout(3000)
-            selects = page.locator("select")
-            count = await selects.count()
-            debug_lines = [f"Found {count} dropdown(s) on the page."]
-            target_index = None
-            for i in range(count):
-                option_texts = await selects.nth(i).locator("option").all_inner_texts()
-                cleaned = [t.strip() for t in option_texts if t.strip()]
-                debug_lines.append(f"Dropdown {i}: {cleaned[:8]}")
-                if target_index is None and any(RESORT in t for t in option_texts):
-                    target_index = i
-            debug_info = " | ".join(debug_lines)
-            if target_index is not None:
-                await selects.nth(target_index).select_option(label=RESORT)
-                await page.wait_for_timeout(3000)
-                found_select = True
-            else:
-                debug_info += " | No dropdown contained 'Skegness' as an option."
-        except Exception as e:
-            debug_info = f"Error while looking for dropdown: {e}"
+        found_select, debug_info = await select_resort(page)
 
         if found_select:
             for _ in range(6):
