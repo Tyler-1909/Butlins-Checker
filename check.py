@@ -69,22 +69,29 @@ async def run():
         await page.wait_for_timeout(1000)
 
         found_select = False
+        debug_info = ""
         try:
             await page.wait_for_selector("select", timeout=20000)
+            await page.wait_for_timeout(3000)  # give options time to load in
             selects = page.locator("select")
             count = await selects.count()
+            debug_lines = [f"Found {count} dropdown(s) on the page."]
             target_index = None
             for i in range(count):
                 option_texts = await selects.nth(i).locator("option").all_inner_texts()
-                if any(RESORT in t for t in option_texts):
+                cleaned = [t.strip() for t in option_texts if t.strip()]
+                debug_lines.append(f"Dropdown {i}: {cleaned[:8]}")
+                if target_index is None and any(RESORT in t for t in option_texts):
                     target_index = i
-                    break
+            debug_info = " | ".join(debug_lines)
             if target_index is not None:
                 await selects.nth(target_index).select_option(label=RESORT)
                 await page.wait_for_timeout(3000)
                 found_select = True
-        except Exception:
-            pass
+            else:
+                debug_info += " | No dropdown contained 'Skegness' as an option."
+        except Exception as e:
+            debug_info = f"Error while looking for dropdown: {e}"
 
         if found_select:
             for _ in range(6):
@@ -105,11 +112,11 @@ async def run():
         screenshot_path = "calendar.png"
         await page.screenshot(path=screenshot_path, full_page=True)
         await browser.close()
-        return screenshot_path, found_select
+        return screenshot_path, found_select, debug_info
 
 
 def main():
-    screenshot_path, found_select = asyncio.run(run())
+    screenshot_path, found_select, debug_info = asyncio.run(run())
     new_hash = file_hash(screenshot_path)
 
     old_hash = None
@@ -120,10 +127,10 @@ def main():
     if not found_select:
         send_notification(
             screenshot_path,
-            "Butlins checker: couldn't reach the calendar",
-            "The script didn't find the resort dropdown - here's what it saw. Send this to Claude to fix.",
+            "Butlins checker: couldn't select resort",
+            f"{debug_info} - send this to Claude to fix.",
         )
-        print("Could not find resort dropdown - sent debug screenshot.")
+        print(f"Could not select resort. Debug info: {debug_info}")
         return
 
     if new_hash != old_hash:
