@@ -69,7 +69,7 @@ async def dismiss_cookie_banner(page):
             continue
 
 
-async def open_resort_dropdown(page):
+async def select_resort(page):
     try:
         await page.get_by_text("CHOOSE A RESORT", exact=False).first.wait_for(
             state="visible", timeout=30000
@@ -77,55 +77,19 @@ async def open_resort_dropdown(page):
     except Exception:
         return False, "The 'Choose a Resort' section never appeared - page may not have loaded."
 
-    strategies = [
-        ("placeholder text", lambda: page.get_by_placeholder("Please select resort")),
-        ("input with resort placeholder (css)", lambda: page.locator("input[placeholder*='resort' i]").first),
-        ("combobox role", lambda: page.get_by_role("combobox").first),
-        ("'Please select resort' text", lambda: page.get_by_text("Please select resort", exact=False).first),
-    ]
-    for label, strat in strategies:
-        try:
-            el = strat()
-            await el.wait_for(state="visible", timeout=15000)
-            await el.scroll_into_view_if_needed(timeout=3000)
-            await el.click(timeout=6000, force=True)
-            await page.wait_for_timeout(1500)
-            option_count = await page.get_by_role("option").count()
-            skeg_count = await page.get_by_text("Skegness", exact=True).count()
-            if option_count > 0 or skeg_count > 1:
-                return True, f"Opened dropdown using: {label}."
-        except Exception:
-            continue
-    return False, "Found the resort section but none of the click strategies opened the dropdown."
-
-
-async def select_resort(page):
-    opened, open_debug = await open_resort_dropdown(page)
-    if not opened:
-        return False, open_debug
-
-    await page.wait_for_timeout(1000)
-
     try:
-        option = page.get_by_role("option", name=RESORT, exact=True)
-        if await option.count() > 0:
-            await option.first.click(timeout=5000, force=True)
-            await page.wait_for_timeout(2500)
-            return True, f"{open_debug} Selected Skegness via role=option."
-    except Exception:
-        pass
+        select_el = page.locator("md-select[aria-label='Please select resort']").first
+        await select_el.wait_for(state="visible", timeout=20000)
+        await select_el.click(timeout=8000)
+        await page.wait_for_timeout(1200)
 
-    try:
-        matches = page.get_by_text(RESORT, exact=True)
-        count = await matches.count()
-        if count > 0:
-            await matches.last.click(timeout=5000, force=True)
-            await page.wait_for_timeout(2500)
-            return True, f"{open_debug} Selected Skegness via text match (option {count} of {count})."
-    except Exception:
-        pass
-
-    return False, f"{open_debug} Opened the dropdown but could not find/click the Skegness option inside it."
+        option_el = page.locator(f"md-option[value='{RESORT}']").first
+        await option_el.wait_for(state="visible", timeout=10000)
+        await option_el.click(timeout=8000)
+        await page.wait_for_timeout(2500)
+        return True, "Selected Skegness via md-select/md-option."
+    except Exception as e:
+        return False, f"Failed to select resort via md-select: {e}"
 
 
 async def run():
@@ -155,7 +119,7 @@ async def run():
                 if header.strip() == TARGET_MONTH_YEAR:
                     break
                 try:
-                    await page.get_by_role("button", name="Next").first.click(timeout=3000)
+                    await page.locator("a.ui-datepicker-next").first.click(timeout=3000)
                 except Exception:
                     break
                 await page.wait_for_timeout(1000)
