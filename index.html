@@ -1,1 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Butlins Checker Trigger</title>
+<style>
+  body {
+    font-family: -apple-system, sans-serif;
+    background: #0f1115;
+    color: #eee;
+    margin: 0;
+    padding: 20px;
+  }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  p.sub { color: #888; margin-top: 0; font-size: 14px; }
+  label { display: block; margin-top: 14px; font-size: 14px; color: #ccc; }
+  input, select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px;
+    font-size: 16px;
+    margin-top: 4px;
+    border-radius: 8px;
+    border: 1px solid #333;
+    background: #1c1f26;
+    color: #eee;
+  }
+  button {
+    width: 100%;
+    padding: 14px;
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: 8px;
+    border: none;
+    margin-top: 16px;
+  }
+  #startBtn { background: #d32f2f; color: white; }
+  #stopBtn { background: #444; color: white; }
+  #testBtn { background: #2d6cdf; color: white; }
+  #status {
+    margin-top: 16px;
+    padding: 12px;
+    border-radius: 8px;
+    background: #1c1f26;
+    font-size: 14px;
+  }
+  #log {
+    margin-top: 12px;
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 12px;
+    background: #000;
+    padding: 10px;
+    border-radius: 8px;
+    white-space: pre-wrap;
+  }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+  .green { background: #4caf50; }
+  .red { background: #d32f2f; }
+  .grey { background: #666; }
+</style>
+</head>
+<body>
 
+<h1>Butlins Checker Trigger</h1>
+<p class="sub">Keeps calling GitHub to run your checker workflow, bypassing the free scheduler's delays.</p>
+
+<label>GitHub username (repo owner)</label>
+<input id="owner" placeholder="e.g. tyler1909" autocapitalize="off" autocorrect="off">
+
+<label>Repository name</label>
+<input id="repo" placeholder="e.g. butlins-checker" autocapitalize="off" autocorrect="off">
+
+<label>Workflow filename</label>
+<input id="workflow" value="check.yml">
+
+<label>Personal access token</label>
+<input id="token" type="password" placeholder="paste your token here" autocapitalize="off" autocorrect="off">
+
+<label>Trigger every</label>
+<select id="interval">
+  <option value="2">2 minutes</option>
+  <option value="5" selected>5 minutes</option>
+  <option value="10">10 minutes</option>
+</select>
+
+<button id="testBtn">Test once</button>
+<button id="startBtn">Start auto-trigger</button>
+<button id="stopBtn" style="display:none;">Stop</button>
+
+<div id="status"><span class="dot grey"></span>Not running</div>
+<div id="log"></div>
+
+<script>
+let timerId = null;
+
+function log(msg, ok) {
+  const el = document.getElementById('log');
+  const time = new Date().toLocaleTimeString();
+  el.textContent = `[${time}] ${msg}\n` + el.textContent;
+}
+
+function setStatus(text, colorClass) {
+  document.getElementById('status').innerHTML =
+    `<span class="dot ${colorClass}"></span>${text}`;
+}
+
+async function triggerWorkflow() {
+  const owner = document.getElementById('owner').value.trim();
+  const repo = document.getElementById('repo').value.trim();
+  const workflow = document.getElementById('workflow').value.trim();
+  const token = document.getElementById('token').value.trim();
+
+  if (!owner || !repo || !workflow || !token) {
+    log('Missing owner, repo, workflow, or token - fill in all fields.');
+    setStatus('Missing info', 'red');
+    return false;
+  }
+
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflow}/dispatches`,
+      {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/vnd.github+json',
+          'Authorization': `Bearer ${token}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ ref: 'main' })
+      }
+    );
+
+    if (res.status === 204) {
+      log('Triggered successfully.');
+      setStatus('Running - last trigger OK', 'green');
+      return true;
+    } else {
+      const text = await res.text();
+      log(`Failed (HTTP ${res.status}): ${text.slice(0, 200)}`);
+      setStatus(`Error (HTTP ${res.status})`, 'red');
+      return false;
+    }
+  } catch (err) {
+    log(`Network error: ${err.message}`);
+    setStatus('Network error', 'red');
+    return false;
+  }
+}
+
+document.getElementById('testBtn').onclick = () => triggerWorkflow();
+
+document.getElementById('startBtn').onclick = () => {
+  const minutes = parseInt(document.getElementById('interval').value, 10);
+  triggerWorkflow();
+  timerId = setInterval(triggerWorkflow, minutes * 60 * 1000);
+  document.getElementById('startBtn').style.display = 'none';
+  document.getElementById('stopBtn').style.display = 'block';
+  log(`Auto-trigger started, every ${minutes} min. Keep this tab open and the screen on.`);
+};
+
+document.getElementById('stopBtn').onclick = () => {
+  clearInterval(timerId);
+  timerId = null;
+  document.getElementById('startBtn').style.display = 'block';
+  document.getElementById('stopBtn').style.display = 'none';
+  setStatus('Stopped', 'grey');
+  log('Auto-trigger stopped.');
+};
+</script>
+
+</body>
+</html>
