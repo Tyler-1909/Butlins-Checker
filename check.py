@@ -35,6 +35,15 @@ def send_notification(image_path, title, message):
     )
 
 
+def send_text_message(title, body_text):
+    requests.put(
+        f"https://ntfy.sh/{NTFY_TOPIC}",
+        data=body_text.encode("utf-8"),
+        headers={"Title": sanitize_header(title)},
+        timeout=30,
+    )
+
+
 def file_hash(path):
     with open(path, "rb") as f:
         return hashlib.sha256(f.read()).hexdigest()
@@ -153,12 +162,24 @@ async def run():
 
         screenshot_path = "calendar.png"
         await page.screenshot(path=screenshot_path, full_page=True)
+
+        html_snippet = ""
+        if not found_select:
+            try:
+                full_html = await page.content()
+                idx = full_html.lower().find("choose a resort")
+                if idx == -1:
+                    idx = 0
+                html_snippet = full_html[max(0, idx - 200): idx + 3000]
+            except Exception:
+                html_snippet = "(could not extract page HTML)"
+
         await browser.close()
-        return screenshot_path, found_select, debug_info
+        return screenshot_path, found_select, debug_info, html_snippet
 
 
 def main():
-    screenshot_path, found_select, debug_info = asyncio.run(run())
+    screenshot_path, found_select, debug_info, html_snippet = asyncio.run(run())
     new_hash = file_hash(screenshot_path)
 
     old_hash = None
@@ -170,7 +191,11 @@ def main():
         send_notification(
             screenshot_path,
             "Butlins checker: couldn't select resort",
-            f"{debug_info} - send this to Claude to fix.",
+            f"{debug_info} - HTML details coming in next message.",
+        )
+        send_text_message(
+            "Butlins checker: page HTML (send this to Claude)",
+            html_snippet,
         )
         print(f"Could not select resort. Debug info: {debug_info}")
         return
