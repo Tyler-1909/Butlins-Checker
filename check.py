@@ -61,30 +61,33 @@ async def dismiss_cookie_banner(page):
 
 
 async def open_resort_dropdown(page):
+    try:
+        await page.get_by_text("CHOOSE A RESORT", exact=False).first.wait_for(
+            state="visible", timeout=30000
+        )
+    except Exception:
+        return False, "The 'Choose a Resort' section never appeared - page may not have loaded."
+
     strategies = [
         ("placeholder text", lambda: page.get_by_placeholder("Please select resort")),
         ("input with resort placeholder (css)", lambda: page.locator("input[placeholder*='resort' i]").first),
         ("combobox role", lambda: page.get_by_role("combobox").first),
-        ("role=combobox css", lambda: page.locator("[role='combobox']").first),
-        ("last 'Please select resort' match", lambda: page.get_by_text("Please select resort", exact=False).last),
-        ("first 'Please select resort' match", lambda: page.get_by_text("Please select resort", exact=False).first),
-        ("div containing 'Please select resort'", lambda: page.locator("div:has-text('Please select resort')").last),
+        ("'Please select resort' text", lambda: page.get_by_text("Please select resort", exact=False).first),
     ]
     for label, strat in strategies:
         try:
             el = strat()
-            if await el.count() == 0:
-                continue
+            await el.wait_for(state="visible", timeout=15000)
             await el.scroll_into_view_if_needed(timeout=3000)
             await el.click(timeout=6000, force=True)
-            await page.wait_for_timeout(1200)
+            await page.wait_for_timeout(1500)
             option_count = await page.get_by_role("option").count()
             skeg_count = await page.get_by_text("Skegness", exact=True).count()
             if option_count > 0 or skeg_count > 1:
                 return True, f"Opened dropdown using: {label}."
         except Exception:
             continue
-    return False, "Tried several ways to click the resort box, none opened it."
+    return False, "Found the resort section but none of the click strategies opened the dropdown."
 
 
 async def select_resort(page):
